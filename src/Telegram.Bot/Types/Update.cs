@@ -87,6 +87,7 @@ namespace Telegram.Bot.Types
         /// </summary>
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
         public PollAnswer PollAnswer { get; set; }
+
         /// <summary>
         /// Gets the update type.
         /// </summary>

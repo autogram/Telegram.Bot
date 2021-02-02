@@ -5,9 +5,10 @@ using Telegram.Bot.Types;
 
 namespace Telegram.Bot.Exceptions
 {
-    internal static class ApiExceptionParser
+    public static class ApiExceptionParser
     {
-        private static readonly IApiExceptionInfo<ApiRequestException>[] ExceptionInfos = {
+        private static readonly IApiExceptionInfo<ApiRequestException>[] ExceptionInfos =
+        {
             new BadRequestExceptionInfo<ChatNotFoundException>("chat not found"),
             new BadRequestExceptionInfo<UserNotFoundException>("user not found"),
             new BadRequestExceptionInfo<InvalidUserIdException>("USER_ID_INVALID"),
@@ -32,12 +33,15 @@ namespace Telegram.Bot.Exceptions
             #endregion
 
             // Telegram removed indefinite article before "private"
-            new BadRequestExceptionInfo<ContactRequestException>("phone number can be requested in a private chats only"),
+            new BadRequestExceptionInfo<ContactRequestException>(
+                "phone number can be requested in a private chats only"),
 
             new ForbiddenExceptionInfo<ChatNotInitiatedException>("bot can't initiate conversation with a user"),
 
-            new BadRequestExceptionInfo<InvalidParameterException>($@"\w{{3,}} Request: invalid (?<{InvalidParameterException.ParamGroupName}>[\w|\s]+)$"),
-            new BadRequestExceptionInfo<InvalidParameterException>($@"\w{{3,}} Request: (?<{InvalidParameterException.ParamGroupName}>[\w|\s]+) invalid$"),
+            new BadRequestExceptionInfo<InvalidParameterException>(
+                $@"\w{{3,}} Request: invalid (?<{InvalidParameterException.ParamGroupName}>[\w|\s]+)$"),
+            new BadRequestExceptionInfo<InvalidParameterException>(
+                $@"\w{{3,}} Request: (?<{InvalidParameterException.ParamGroupName}>[\w|\s]+) invalid$"),
 
             new BadRequestExceptionInfo<MessageIsNotModifiedException>("message is not modified"),
         };
@@ -51,7 +55,8 @@ namespace Telegram.Bot.Exceptions
 
             if (typeInfo is null)
             {
-                exception = new ApiRequestException(apiResponse.Description, apiResponse.ErrorCode, apiResponse.Parameters);
+                exception = new ApiRequestException(apiResponse.Description, apiResponse.ErrorCode,
+                    apiResponse.Parameters);
             }
             else
             {
@@ -78,6 +83,7 @@ namespace Telegram.Bot.Exceptions
                     exception = Activator.CreateInstance(typeInfo.Type, errorMessage) as ApiRequestException;
                 }
             }
+
             return exception;
         }
 

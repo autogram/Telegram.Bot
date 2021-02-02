@@ -21,7 +21,7 @@ namespace Telegram.Bot.Args
         /// Initializes a new instance of the <see cref="UpdateEventArgs"/> class.
         /// </summary>
         /// <param name="update">The update.</param>
-        internal UpdateEventArgs(Update update)
+        public UpdateEventArgs(Update update)
         {
             Update = update;
         }

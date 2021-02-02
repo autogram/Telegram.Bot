@@ -116,6 +116,7 @@ namespace Telegram.Bot.Types
                 hashCode = (hashCode * 397) ^ (CanJoinGroups?.GetHashCode() ?? 0);
                 hashCode = (hashCode * 397) ^ (CanReadAllGroupMessages?.GetHashCode() ?? 0);
                 hashCode = (hashCode * 397) ^ (SupportsInlineQueries?.GetHashCode() ?? 0);
+
                 // ReSharper restore NonReadonlyMemberInGetHashCode
                 return hashCode;
             }
@@ -123,8 +124,8 @@ namespace Telegram.Bot.Types
 
         /// <inheritdoc/>
         public override string ToString() => (Username == null
-                                                 ? FirstName + LastName?.Insert(0, " ")
-                                                 : $"@{Username}") +
+                                                  ? FirstName + LastName?.Insert(0, " ")
+                                                  : $"@{Username}") +
                                              $" ({Id})";
     }
 }

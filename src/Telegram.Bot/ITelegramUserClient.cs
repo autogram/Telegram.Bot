@@ -19,19 +19,15 @@ namespace Telegram.Bot
     /// <summary>
     /// A client interface to use the Telegram Bot API
     /// </summary>
-    public interface ITelegramBotClient
+    public interface ITelegramUserClient
     {
         /// <summary>
         /// Unique identifier for the bot from bot token. For example, for the bot token
         /// "1234567:4TT8bAc8GHUspu3ERYn-KGcvsvGB9u_n4ddy", the bot id is "1234567".
         /// </summary>
-        int BotId { get; }
+        long UserUniqueId { get; }
 
         #region Config Properties
-
-        string BaseUrl { get; set; }
-        string BaseFileUrl { get; set; }
-
 
         /// <summary>
         /// Timeout for requests
@@ -48,7 +44,11 @@ namespace Telegram.Bot
         /// </summary>
         int MessageOffset { get; set; }
 
+
         #endregion  Config Properties
+
+        string BaseUrl { get; set; }
+        string BaseFileUrl { get; set; }
 
         #region Events
 

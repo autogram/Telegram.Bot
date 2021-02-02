@@ -13,14 +13,17 @@ namespace Telegram.Bot.Types.Enums
         /// The forehead
         /// </summary>
         Forehead,
+
         /// <summary>
         /// The eyes
         /// </summary>
         Eyes,
+
         /// <summary>
         /// The mouth
         /// </summary>
         Mouth,
+
         /// <summary>
         /// The chin
         /// </summary>

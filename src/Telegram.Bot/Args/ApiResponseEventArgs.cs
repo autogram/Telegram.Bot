@@ -10,11 +10,11 @@ namespace Telegram.Bot.Args
         /// <summary>
         /// HTTP response received from API
         /// </summary>
-        public HttpResponseMessage ResponseMessage { get; internal set; }
+        public HttpResponseMessage ResponseMessage { get; set; }
 
         /// <summary>
         /// Event arguments of this request
         /// </summary>
-        public ApiRequestEventArgs ApiRequestEventArgs { get; internal set; }
+        public ApiRequestEventArgs ApiRequestEventArgs { get; set; }
     }
 }

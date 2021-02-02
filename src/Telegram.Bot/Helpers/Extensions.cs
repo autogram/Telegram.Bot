@@ -58,13 +58,13 @@ namespace Telegram.Bot.Helpers
             string contentDisposision = $@"form-data; name=""{name}""; filename=""{fileName}""".EncodeUtf8();
 
             HttpContent mediaPartContent = new StreamContent(content)
-            {
-                Headers =
-                {
-                    {"Content-Type", "application/octet-stream"},
-                    {"Content-Disposition", contentDisposision}
-                }
-            };
+                                               {
+                                                   Headers =
+                                                       {
+                                                           {"Content-Type", "application/octet-stream"},
+                                                           {"Content-Disposition", contentDisposision}
+                                                       }
+                                               };
 
             multipartContent.Add(mediaPartContent, name, fileName);
         }

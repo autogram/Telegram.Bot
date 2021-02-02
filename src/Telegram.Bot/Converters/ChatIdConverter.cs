@@ -1,6 +1,8 @@
-﻿using Newtonsoft.Json;
+﻿using System;
+
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System;
+
 using Telegram.Bot.Types;
 
 namespace Telegram.Bot.Converters

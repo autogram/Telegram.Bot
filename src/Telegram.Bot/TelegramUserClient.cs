@@ -24,14 +24,16 @@ namespace Telegram.Bot
     /// <summary>
     /// A client to use the Telegram Bot API
     /// </summary>
-    public class TelegramBotClient : ITelegramBotClient
+    public class TelegramUserClient : ITelegramUserClient
     {
         /// <inheritdoc/>
-        public int BotId { get; }
+        public long UserUniqueId { get; }
 
         private static readonly Update[] EmptyUpdates = { };
 
         private string _baseRequestUrl;
+
+        private string _baseFileRequestUrl;
 
         private readonly string _token;
 
@@ -41,11 +43,15 @@ namespace Telegram.Bot
 
         public string BaseUrl
         {
-            get => _baseRequestUrl ?? $"https://user.tgapi.me/bot{_token}/";
+            get => _baseRequestUrl ?? $"https://userapi.josxa.dev/user{_token}/";
             set => _baseRequestUrl = $"{value}{_token}/";
         }
 
-        public string BaseFileUrl { get; set; } = "https://user.tgapi.me/file/bot";
+        public string BaseFileUrl
+        {
+            get => _baseRequestUrl ?? $"https://files.userapi.josxa.dev/user{_token}/";
+            set => _baseRequestUrl = $"{value}{_token}/";
+        }
 
 
         /// <summary>
@@ -163,13 +169,13 @@ namespace Telegram.Bot
         /// <param name="token">API token</param>
         /// <param name="httpClient">A custom <see cref="HttpClient"/></param>
         /// <exception cref="ArgumentException">Thrown if <paramref name="token"/> format is invalid</exception>
-        public TelegramBotClient(string token, HttpClient httpClient = null)
+        public TelegramUserClient(string token, HttpClient httpClient = null)
         {
             _token = token ?? throw new ArgumentNullException(nameof(token));
             string[] parts = _token.Split(':');
-            if (parts.Length > 1 && int.TryParse(parts[0], out int id))
+            if (parts.Length > 1 && long.TryParse(parts[0], out long phone))
             {
-                BotId = id;
+                UserUniqueId = phone;
             }
             else
             {
@@ -183,7 +189,40 @@ namespace Telegram.Bot
             _httpClient = httpClient ?? new HttpClient();
         }
 
-         /// <inheritdoc />
+        /// <summary>
+        /// Create a new <see cref="TelegramBotClient"/> instance behind a proxy.
+        /// </summary>
+        /// <param name="token">API token</param>
+        /// <param name="webProxy">Use this <see cref="IWebProxy"/> to connect to the API</param>
+        /// <exception cref="ArgumentException">Thrown if <paramref name="token"/> format is invalid</exception>
+        public TelegramUserClient(string token, IWebProxy webProxy)
+        {
+            _token = token ?? throw new ArgumentNullException(nameof(token));
+            string[] parts = _token.Split(':');
+            if (int.TryParse(parts[0], out int id))
+            {
+                UserUniqueId = id;
+            }
+            else
+            {
+                throw new ArgumentException(
+                    "Invalid format. A valid token looks like \"1234567:4TT8bAc8GHUspu3ERYn-KGcvsvGB9u_n4ddy\".",
+                    nameof(token)
+                );
+            }
+
+            _baseRequestUrl = $"{BaseUrl}{_token}/";
+            var httpClientHander = new HttpClientHandler
+            {
+                Proxy = webProxy,
+                UseProxy = true
+            };
+            _httpClient = new HttpClient(httpClientHander);
+        }
+
+        #region Helpers
+
+        /// <inheritdoc />
         public async Task<ApiResponse<TResponse>> ProxyRequestAsync<TResponse>(
             HttpRequestMessage httpRequest,
             string methodName,
@@ -255,39 +294,6 @@ namespace Telegram.Bot
         }
 
 
-        /// <summary>
-        /// Create a new <see cref="TelegramBotClient"/> instance behind a proxy.
-        /// </summary>
-        /// <param name="token">API token</param>
-        /// <param name="webProxy">Use this <see cref="IWebProxy"/> to connect to the API</param>
-        /// <exception cref="ArgumentException">Thrown if <paramref name="token"/> format is invalid</exception>
-        public TelegramBotClient(string token, IWebProxy webProxy)
-        {
-            _token = token ?? throw new ArgumentNullException(nameof(token));
-            string[] parts = _token.Split(':');
-            if (int.TryParse(parts[0], out int id))
-            {
-                BotId = id;
-            }
-            else
-            {
-                throw new ArgumentException(
-                    "Invalid format. A valid token looks like \"1234567:4TT8bAc8GHUspu3ERYn-KGcvsvGB9u_n4ddy\".",
-                    nameof(token)
-                );
-            }
-
-            _baseRequestUrl = $"{BaseUrl}{_token}/";
-            var httpClientHander = new HttpClientHandler
-            {
-                Proxy = webProxy,
-                UseProxy = true
-            };
-            _httpClient = new HttpClient(httpClientHander);
-        }
-
-        #region Helpers
-
         /// <inheritdoc />
         public async Task<TResponse> MakeRequestAsync<TResponse>(
             IRequest<TResponse> request,
@@ -303,7 +309,7 @@ namespace Telegram.Bot
             var reqDataArgs = new ApiRequestEventArgs
             {
                 MethodName = request.MethodName,
-                HttpContent = httpRequest.Content,
+                HttpContent = httpRequest.Content
             };
             MakingApiRequest?.Invoke(this, reqDataArgs);
 
@@ -476,14 +482,16 @@ namespace Telegram.Bot
             int timeout = default,
             IEnumerable<UpdateType> allowedUpdates = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new GetUpdatesRequest
+        )
+        {
+            return MakeRequestAsync(new GetUpdatesRequest
             {
                 Offset = offset,
                 Limit = limit,
                 Timeout = timeout,
                 AllowedUpdates = allowedUpdates
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetWebhookAsync(
@@ -492,20 +500,26 @@ namespace Telegram.Bot
             int maxConnections = default,
             IEnumerable<UpdateType> allowedUpdates = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SetWebhookRequest(url, certificate)
+        )
+        {
+            return MakeRequestAsync(new SetWebhookRequest(url, certificate)
             {
                 MaxConnections = maxConnections,
                 AllowedUpdates = allowedUpdates
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task DeleteWebhookAsync(CancellationToken cancellationToken = default)
-            => MakeRequestAsync(new DeleteWebhookRequest(), cancellationToken);
+        {
+            return MakeRequestAsync(new DeleteWebhookRequest(), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<WebhookInfo> GetWebhookInfoAsync(CancellationToken cancellationToken = default)
-            => MakeRequestAsync(new GetWebhookInfoRequest(), cancellationToken);
+        {
+            return MakeRequestAsync(new GetWebhookInfoRequest(), cancellationToken);
+        }
 
         #endregion Getting updates
 
@@ -513,7 +527,9 @@ namespace Telegram.Bot
 
         /// <inheritdoc />
         public Task<User> GetMeAsync(CancellationToken cancellationToken = default)
-            => MakeRequestAsync(new GetMeRequest(), cancellationToken);
+        {
+            return MakeRequestAsync(new GetMeRequest(), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendTextMessageAsync(
@@ -525,8 +541,9 @@ namespace Telegram.Bot
             int replyToMessageId = default,
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendMessageRequest(chatId, text)
+        )
+        {
+            return MakeRequestAsync(new SendMessageRequest(chatId, text)
             {
                 ParseMode = parseMode,
                 DisableWebPagePreview = disableWebPagePreview,
@@ -534,6 +551,7 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> ForwardMessageAsync(
@@ -542,11 +560,13 @@ namespace Telegram.Bot
             int messageId,
             bool disableNotification = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new ForwardMessageRequest(chatId, fromChatId, messageId)
+        )
+        {
+            return MakeRequestAsync(new ForwardMessageRequest(chatId, fromChatId, messageId)
             {
                 DisableNotification = disableNotification
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendPhotoAsync(
@@ -558,8 +578,9 @@ namespace Telegram.Bot
             int replyToMessageId = default,
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendPhotoRequest(chatId, photo)
+        )
+        {
+            return MakeRequestAsync(new SendPhotoRequest(chatId, photo)
             {
                 Caption = caption,
                 ParseMode = parseMode,
@@ -567,6 +588,7 @@ namespace Telegram.Bot
                 DisableNotification = disableNotification,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendAudioAsync(
@@ -582,8 +604,9 @@ namespace Telegram.Bot
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
             InputMedia thumb = default
-        ) =>
-            MakeRequestAsync(new SendAudioRequest(chatId, audio)
+        )
+        {
+            return MakeRequestAsync(new SendAudioRequest(chatId, audio)
             {
                 Caption = caption,
                 ParseMode = parseMode,
@@ -595,6 +618,7 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendDocumentAsync(
@@ -607,8 +631,9 @@ namespace Telegram.Bot
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
             InputMedia thumb = default
-        ) =>
-            MakeRequestAsync(new SendDocumentRequest(chatId, document)
+        )
+        {
+            return MakeRequestAsync(new SendDocumentRequest(chatId, document)
             {
                 Caption = caption,
                 Thumb = thumb,
@@ -617,6 +642,7 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendStickerAsync(
@@ -626,13 +652,15 @@ namespace Telegram.Bot
             int replyToMessageId = default,
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendStickerRequest(chatId, sticker)
+        )
+        {
+            return MakeRequestAsync(new SendStickerRequest(chatId, sticker)
             {
                 DisableNotification = disableNotification,
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendVideoAsync(
@@ -649,8 +677,9 @@ namespace Telegram.Bot
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
             InputMedia thumb = default
-        ) =>
-            MakeRequestAsync(new SendVideoRequest(chatId, video)
+        )
+        {
+            return MakeRequestAsync(new SendVideoRequest(chatId, video)
             {
                 Duration = duration,
                 Width = width,
@@ -663,6 +692,7 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendAnimationAsync(
@@ -678,8 +708,9 @@ namespace Telegram.Bot
             int replyToMessageId = default,
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendAnimationRequest(chatId, animation)
+        )
+        {
+            return MakeRequestAsync(new SendAnimationRequest(chatId, animation)
             {
                 Duration = duration,
                 Width = width,
@@ -689,8 +720,9 @@ namespace Telegram.Bot
                 ParseMode = parseMode,
                 DisableNotification = disableNotification,
                 ReplyToMessageId = replyToMessageId,
-                ReplyMarkup = replyMarkup,
+                ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendVoiceAsync(
@@ -703,8 +735,9 @@ namespace Telegram.Bot
             int replyToMessageId = default,
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendVoiceRequest(chatId, voice)
+        )
+        {
+            return MakeRequestAsync(new SendVoiceRequest(chatId, voice)
             {
                 Caption = caption,
                 ParseMode = parseMode,
@@ -713,6 +746,7 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendVideoNoteAsync(
@@ -725,8 +759,9 @@ namespace Telegram.Bot
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
             InputMedia thumb = default
-        ) =>
-            MakeRequestAsync(new SendVideoNoteRequest(chatId, videoNote)
+        )
+        {
+            return MakeRequestAsync(new SendVideoNoteRequest(chatId, videoNote)
             {
                 Duration = duration,
                 Length = length,
@@ -735,6 +770,7 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         [Obsolete("Use the other overload of this method instead. Only photo and video input types are allowed.")]
@@ -753,7 +789,7 @@ namespace Telegram.Bot
             return MakeRequestAsync(new SendMediaGroupRequest(chatId, inputMedia)
             {
                 DisableNotification = disableNotification,
-                ReplyToMessageId = replyToMessageId,
+                ReplyToMessageId = replyToMessageId
             }, cancellationToken);
         }
 
@@ -764,12 +800,14 @@ namespace Telegram.Bot
             bool disableNotification = default,
             int replyToMessageId = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendMediaGroupRequest(chatId, inputMedia)
+        )
+        {
+            return MakeRequestAsync(new SendMediaGroupRequest(chatId, inputMedia)
             {
                 DisableNotification = disableNotification,
-                ReplyToMessageId = replyToMessageId,
+                ReplyToMessageId = replyToMessageId
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendLocationAsync(
@@ -781,14 +819,16 @@ namespace Telegram.Bot
             int replyToMessageId = default,
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendLocationRequest(chatId, latitude, longitude)
+        )
+        {
+            return MakeRequestAsync(new SendLocationRequest(chatId, latitude, longitude)
             {
                 LivePeriod = livePeriod,
                 DisableNotification = disableNotification,
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendVenueAsync(
@@ -803,8 +843,9 @@ namespace Telegram.Bot
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
             string foursquareType = default
-        ) =>
-            MakeRequestAsync(new SendVenueRequest(chatId, latitude, longitude, title, address)
+        )
+        {
+            return MakeRequestAsync(new SendVenueRequest(chatId, latitude, longitude, title, address)
             {
                 FoursquareId = foursquareId,
                 FoursquareType = foursquareType,
@@ -812,6 +853,7 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendContactAsync(
@@ -824,8 +866,9 @@ namespace Telegram.Bot
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
             string vCard = default
-        ) =>
-            MakeRequestAsync(new SendContactRequest(chatId, phoneNumber, firstName)
+        )
+        {
+            return MakeRequestAsync(new SendContactRequest(chatId, phoneNumber, firstName)
             {
                 LastName = lastName,
                 Vcard = vCard,
@@ -833,6 +876,7 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendPollAsync(
@@ -852,8 +896,9 @@ namespace Telegram.Bot
             ParseMode explanationParseMode = default,
             int? openPeriod = default,
             DateTime? closeDate = default
-        ) =>
-            MakeRequestAsync(new SendPollRequest(chatId, question, options)
+        )
+        {
+            return MakeRequestAsync(new SendPollRequest(chatId, question, options)
             {
                 DisableNotification = disableNotification,
                 ReplyToMessageId = replyToMessageId,
@@ -868,6 +913,7 @@ namespace Telegram.Bot
                 Explanation = explanation,
                 ExplanationParseMode = explanationParseMode
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SendDiceAsync(
@@ -876,8 +922,9 @@ namespace Telegram.Bot
             int replyToMessageId = default,
             IReplyMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
-            Emoji? emoji = default) =>
-            MakeRequestAsync(
+            Emoji? emoji = default)
+        {
+            return MakeRequestAsync(
                 new SendDiceRequest(chatId)
                 {
                     DisableNotification = disableNotification,
@@ -887,14 +934,17 @@ namespace Telegram.Bot
                 },
                 cancellationToken
             );
+        }
 
         /// <inheritdoc />
         public Task SendChatActionAsync(
             ChatId chatId,
             ChatAction chatAction,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendChatActionRequest(chatId, chatAction), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new SendChatActionRequest(chatId, chatAction), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<UserProfilePhotos> GetUserProfilePhotosAsync(
@@ -902,19 +952,23 @@ namespace Telegram.Bot
             int offset = default,
             int limit = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new GetUserProfilePhotosRequest(userId)
+        )
+        {
+            return MakeRequestAsync(new GetUserProfilePhotosRequest(userId)
             {
                 Offset = offset,
                 Limit = limit
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<File> GetFileAsync(
             string fileId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new GetFileRequest(fileId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new GetFileRequest(fileId), cancellationToken);
+        }
 
         /// <inheritdoc />
         [Obsolete("This method will be removed in next major release. Use its overload instead.")]
@@ -982,55 +1036,69 @@ namespace Telegram.Bot
             int userId,
             DateTime untilDate = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new KickChatMemberRequest(chatId, userId)
+        )
+        {
+            return MakeRequestAsync(new KickChatMemberRequest(chatId, userId)
             {
                 UntilDate = untilDate
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task LeaveChatAsync(
             ChatId chatId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new LeaveChatRequest(chatId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new LeaveChatRequest(chatId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task UnbanChatMemberAsync(
             ChatId chatId,
             int userId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new UnbanChatMemberRequest(chatId, userId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new UnbanChatMemberRequest(chatId, userId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Chat> GetChatAsync(
             ChatId chatId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new GetChatRequest(chatId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new GetChatRequest(chatId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<ChatMember[]> GetChatAdministratorsAsync(
             ChatId chatId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new GetChatAdministratorsRequest(chatId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new GetChatAdministratorsRequest(chatId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<int> GetChatMembersCountAsync(
             ChatId chatId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new GetChatMembersCountRequest(chatId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new GetChatMembersCountRequest(chatId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<ChatMember> GetChatMemberAsync(
             ChatId chatId,
             int userId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new GetChatMemberRequest(chatId, userId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new GetChatMemberRequest(chatId, userId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task AnswerCallbackQueryAsync(
@@ -1040,14 +1108,16 @@ namespace Telegram.Bot
             string url = default,
             int cacheTime = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new AnswerCallbackQueryRequest(callbackQueryId)
+        )
+        {
+            return MakeRequestAsync(new AnswerCallbackQueryRequest(callbackQueryId)
             {
                 Text = text,
                 ShowAlert = showAlert,
                 Url = url,
                 CacheTime = cacheTime
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task RestrictChatMemberAsync(
@@ -1056,13 +1126,15 @@ namespace Telegram.Bot
             ChatPermissions permissions,
             DateTime untilDate = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(
+        )
+        {
+            return MakeRequestAsync(
                 new RestrictChatMemberRequest(chatId, userId, permissions)
                 {
                     UntilDate = untilDate
                 },
                 cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task PromoteChatMemberAsync(
@@ -1077,8 +1149,9 @@ namespace Telegram.Bot
             bool? canPinMessages = default,
             bool? canPromoteMembers = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new PromoteChatMemberRequest(chatId, userId)
+        )
+        {
+            return MakeRequestAsync(new PromoteChatMemberRequest(chatId, userId)
             {
                 CanChangeInfo = canChangeInfo,
                 CanPostMessages = canPostMessages,
@@ -1089,6 +1162,7 @@ namespace Telegram.Bot
                 CanPinMessages = canPinMessages,
                 CanPromoteMembers = canPromoteMembers
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetChatAdministratorCustomTitleAsync(
@@ -1096,27 +1170,35 @@ namespace Telegram.Bot
             int userId,
             string customTitle,
             CancellationToken cancellationToken = default)
-            => MakeRequestAsync(
+        {
+            return MakeRequestAsync(
                 new SetChatAdministratorCustomTitleRequest(chatId, userId, customTitle),
                 cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetChatPermissionsAsync(
             ChatId chatId,
             ChatPermissions permissions,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SetChatPermissionsRequest(chatId, permissions), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new SetChatPermissionsRequest(chatId, permissions), cancellationToken);
+        }
 
         /// <inheritdoc />
-        public Task<BotCommand[]> GetMyCommandsAsync(CancellationToken cancellationToken = default) =>
-            MakeRequestAsync(new GetMyCommandsRequest(), cancellationToken);
+        public Task<BotCommand[]> GetMyCommandsAsync(CancellationToken cancellationToken = default)
+        {
+            return MakeRequestAsync(new GetMyCommandsRequest(), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetMyCommandsAsync(
             IEnumerable<BotCommand> commands,
-            CancellationToken cancellationToken = default) =>
-            MakeRequestAsync(new SetMyCommandsRequest(commands), cancellationToken);
+            CancellationToken cancellationToken = default)
+        {
+            return MakeRequestAsync(new SetMyCommandsRequest(commands), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> StopMessageLiveLocationAsync(
@@ -1124,22 +1206,26 @@ namespace Telegram.Bot
             int messageId,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new StopMessageLiveLocationRequest(chatId, messageId)
+        )
+        {
+            return MakeRequestAsync(new StopMessageLiveLocationRequest(chatId, messageId)
             {
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task StopMessageLiveLocationAsync(
             string inlineMessageId,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new StopInlineMessageLiveLocationRequest(inlineMessageId)
+        )
+        {
+            return MakeRequestAsync(new StopInlineMessageLiveLocationRequest(inlineMessageId)
             {
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         #endregion Available methods
 
@@ -1154,13 +1240,15 @@ namespace Telegram.Bot
             bool disableWebPagePreview = default,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new EditMessageTextRequest(chatId, messageId, text)
+        )
+        {
+            return MakeRequestAsync(new EditMessageTextRequest(chatId, messageId, text)
             {
                 ParseMode = parseMode,
                 DisableWebPagePreview = disableWebPagePreview,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task EditMessageTextAsync(
@@ -1170,13 +1258,15 @@ namespace Telegram.Bot
             bool disableWebPagePreview = default,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new EditInlineMessageTextRequest(inlineMessageId, text)
+        )
+        {
+            return MakeRequestAsync(new EditInlineMessageTextRequest(inlineMessageId, text)
             {
                 DisableWebPagePreview = disableWebPagePreview,
                 ReplyMarkup = replyMarkup,
                 ParseMode = parseMode
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> EditMessageCaptionAsync(
@@ -1186,12 +1276,14 @@ namespace Telegram.Bot
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
             ParseMode parseMode = default
-        ) =>
-            MakeRequestAsync(new EditMessageCaptionRequest(chatId, messageId, caption)
+        )
+        {
+            return MakeRequestAsync(new EditMessageCaptionRequest(chatId, messageId, caption)
             {
                 ParseMode = parseMode,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task EditMessageCaptionAsync(
@@ -1200,12 +1292,14 @@ namespace Telegram.Bot
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default,
             ParseMode parseMode = default
-        ) =>
-            MakeRequestAsync(new EditInlineMessageCaptionRequest(inlineMessageId, caption)
+        )
+        {
+            return MakeRequestAsync(new EditInlineMessageCaptionRequest(inlineMessageId, caption)
             {
                 ParseMode = parseMode,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> EditMessageMediaAsync(
@@ -1214,11 +1308,13 @@ namespace Telegram.Bot
             InputMediaBase media,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new EditMessageMediaRequest(chatId, messageId, media)
+        )
+        {
+            return MakeRequestAsync(new EditMessageMediaRequest(chatId, messageId, media)
             {
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task EditMessageMediaAsync(
@@ -1226,11 +1322,13 @@ namespace Telegram.Bot
             InputMediaBase media,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new EditInlineMessageMediaRequest(inlineMessageId, media)
+        )
+        {
+            return MakeRequestAsync(new EditInlineMessageMediaRequest(inlineMessageId, media)
             {
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> EditMessageReplyMarkupAsync(
@@ -1238,20 +1336,24 @@ namespace Telegram.Bot
             int messageId,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(
+        )
+        {
+            return MakeRequestAsync(
                 new EditMessageReplyMarkupRequest(chatId, messageId, replyMarkup),
                 cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task EditMessageReplyMarkupAsync(
             string inlineMessageId,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(
+        )
+        {
+            return MakeRequestAsync(
                 new EditInlineMessageReplyMarkupRequest(inlineMessageId, replyMarkup),
                 cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> EditMessageLiveLocationAsync(
@@ -1261,11 +1363,13 @@ namespace Telegram.Bot
             float longitude,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new EditMessageLiveLocationRequest(chatId, messageId, latitude, longitude)
+        )
+        {
+            return MakeRequestAsync(new EditMessageLiveLocationRequest(chatId, messageId, latitude, longitude)
             {
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task EditMessageLiveLocationAsync(
@@ -1274,11 +1378,13 @@ namespace Telegram.Bot
             float longitude,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new EditInlineMessageLiveLocationRequest(inlineMessageId, latitude, longitude)
+        )
+        {
+            return MakeRequestAsync(new EditInlineMessageLiveLocationRequest(inlineMessageId, latitude, longitude)
             {
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Poll> StopPollAsync(
@@ -1286,19 +1392,23 @@ namespace Telegram.Bot
             int messageId,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new StopPollRequest(chatId, messageId)
+        )
+        {
+            return MakeRequestAsync(new StopPollRequest(chatId, messageId)
             {
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task DeleteMessageAsync(
             ChatId chatId,
             int messageId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new DeleteMessageRequest(chatId, messageId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new DeleteMessageRequest(chatId, messageId), cancellationToken);
+        }
 
         #endregion Updating messages
 
@@ -1314,8 +1424,9 @@ namespace Telegram.Bot
             string switchPmText = default,
             string switchPmParameter = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new AnswerInlineQueryRequest(inlineQueryId, results)
+        )
+        {
+            return MakeRequestAsync(new AnswerInlineQueryRequest(inlineQueryId, results)
             {
                 CacheTime = cacheTime,
                 IsPersonal = isPersonal,
@@ -1323,6 +1434,7 @@ namespace Telegram.Bot
                 SwitchPmText = switchPmText,
                 SwitchPmParameter = switchPmParameter
             }, cancellationToken);
+        }
 
         #endregion Inline mode
 
@@ -1354,17 +1466,18 @@ namespace Telegram.Bot
             CancellationToken cancellationToken = default,
             bool sendPhoneNumberToProvider = default,
             bool sendEmailToProvider = default
-        ) =>
-            MakeRequestAsync(new SendInvoiceRequest(chatId,
-                                 title,
-                                 description,
-                                 payload,
-                                 providerToken,
-                                 startParameter,
-                                 currency,
+        )
+        {
+            return MakeRequestAsync(new SendInvoiceRequest(chatId,
+                                        title,
+                                        description,
+                                        payload,
+                                        providerToken,
+                                        startParameter,
+                                        currency,
 
-                                 // ReSharper disable once PossibleMultipleEnumeration
-                                 prices)
+                                        // ReSharper disable once PossibleMultipleEnumeration
+                                        prices)
             {
                 ProviderData = providerData,
                 PhotoUrl = photoUrl,
@@ -1382,37 +1495,48 @@ namespace Telegram.Bot
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task AnswerShippingQueryAsync(
             string shippingQueryId,
             IEnumerable<ShippingOption> shippingOptions,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new AnswerShippingQueryRequest(shippingQueryId, shippingOptions), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new AnswerShippingQueryRequest(shippingQueryId, shippingOptions),
+                cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task AnswerShippingQueryAsync(
             string shippingQueryId,
             string errorMessage,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new AnswerShippingQueryRequest(shippingQueryId, errorMessage), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new AnswerShippingQueryRequest(shippingQueryId, errorMessage), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task AnswerPreCheckoutQueryAsync(
             string preCheckoutQueryId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new AnswerPreCheckoutQueryRequest(preCheckoutQueryId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new AnswerPreCheckoutQueryRequest(preCheckoutQueryId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task AnswerPreCheckoutQueryAsync(
             string preCheckoutQueryId,
             string errorMessage,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new AnswerPreCheckoutQueryRequest(preCheckoutQueryId, errorMessage), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new AnswerPreCheckoutQueryRequest(preCheckoutQueryId, errorMessage),
+                cancellationToken);
+        }
 
         #endregion Payments
 
@@ -1426,13 +1550,15 @@ namespace Telegram.Bot
             int replyToMessageId = default,
             InlineKeyboardMarkup replyMarkup = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SendGameRequest(chatId, gameShortName)
+        )
+        {
+            return MakeRequestAsync(new SendGameRequest(chatId, gameShortName)
             {
                 DisableNotification = disableNotification,
                 ReplyToMessageId = replyToMessageId,
                 ReplyMarkup = replyMarkup
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<Message> SetGameScoreAsync(
@@ -1443,12 +1569,14 @@ namespace Telegram.Bot
             bool force = default,
             bool disableEditMessage = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SetGameScoreRequest(userId, score, chatId, messageId)
+        )
+        {
+            return MakeRequestAsync(new SetGameScoreRequest(userId, score, chatId, messageId)
             {
                 Force = force,
                 DisableEditMessage = disableEditMessage
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetGameScoreAsync(
@@ -1458,12 +1586,14 @@ namespace Telegram.Bot
             bool force = default,
             bool disableEditMessage = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SetInlineGameScoreRequest(userId, score, inlineMessageId)
+        )
+        {
+            return MakeRequestAsync(new SetInlineGameScoreRequest(userId, score, inlineMessageId)
             {
                 Force = force,
                 DisableEditMessage = disableEditMessage
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<GameHighScore[]> GetGameHighScoresAsync(
@@ -1471,20 +1601,24 @@ namespace Telegram.Bot
             long chatId,
             int messageId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(
+        )
+        {
+            return MakeRequestAsync(
                 new GetGameHighScoresRequest(userId, chatId, messageId),
                 cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<GameHighScore[]> GetGameHighScoresAsync(
             int userId,
             string inlineMessageId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(
+        )
+        {
+            return MakeRequestAsync(
                 new GetInlineGameHighScoresRequest(userId, inlineMessageId),
                 cancellationToken);
+        }
 
         #endregion Games
 
@@ -1494,39 +1628,49 @@ namespace Telegram.Bot
         public Task<string> ExportChatInviteLinkAsync(
             ChatId chatId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new ExportChatInviteLinkRequest(chatId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new ExportChatInviteLinkRequest(chatId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetChatPhotoAsync(
             ChatId chatId,
             InputFileStream photo,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SetChatPhotoRequest(chatId, photo), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new SetChatPhotoRequest(chatId, photo), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task DeleteChatPhotoAsync(
             ChatId chatId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new DeleteChatPhotoRequest(chatId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new DeleteChatPhotoRequest(chatId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetChatTitleAsync(
             ChatId chatId,
             string title,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SetChatTitleRequest(chatId, title), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new SetChatTitleRequest(chatId, title), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetChatDescriptionAsync(
             ChatId chatId,
             string description = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SetChatDescriptionRequest(chatId, description), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new SetChatDescriptionRequest(chatId, description), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task PinChatMessageAsync(
@@ -1534,33 +1678,41 @@ namespace Telegram.Bot
             int messageId,
             bool disableNotification = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new PinChatMessageRequest(chatId, messageId)
+        )
+        {
+            return MakeRequestAsync(new PinChatMessageRequest(chatId, messageId)
             {
                 DisableNotification = disableNotification
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task UnpinChatMessageAsync(
             ChatId chatId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new UnpinChatMessageRequest(chatId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new UnpinChatMessageRequest(chatId), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetChatStickerSetAsync(
             ChatId chatId,
             string stickerSetName,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new SetChatStickerSetRequest(chatId, stickerSetName), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new SetChatStickerSetRequest(chatId, stickerSetName), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task DeleteChatStickerSetAsync(
             ChatId chatId,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new DeleteChatStickerSetRequest(chatId), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new DeleteChatStickerSetRequest(chatId), cancellationToken);
+        }
 
         #endregion
 
@@ -1570,16 +1722,20 @@ namespace Telegram.Bot
         public Task<StickerSet> GetStickerSetAsync(
             string name,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new GetStickerSetRequest(name), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new GetStickerSetRequest(name), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<File> UploadStickerFileAsync(
             int userId,
             InputFileStream pngSticker,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new UploadStickerFileRequest(userId, pngSticker), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new UploadStickerFileRequest(userId, pngSticker), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task CreateNewStickerSetAsync(
@@ -1591,12 +1747,14 @@ namespace Telegram.Bot
             bool isMasks = default,
             MaskPosition maskPosition = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new CreateNewStickerSetRequest(userId, name, title, pngSticker, emojis)
+        )
+        {
+            return MakeRequestAsync(new CreateNewStickerSetRequest(userId, name, title, pngSticker, emojis)
             {
                 ContainsMasks = isMasks,
                 MaskPosition = maskPosition
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task AddStickerToSetAsync(
@@ -1606,11 +1764,13 @@ namespace Telegram.Bot
             string emojis,
             MaskPosition maskPosition = default,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new AddStickerToSetRequest(userId, name, pngSticker, emojis)
+        )
+        {
+            return MakeRequestAsync(new AddStickerToSetRequest(userId, name, pngSticker, emojis)
             {
                 MaskPosition = maskPosition
             }, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task CreateNewAnimatedStickerSetAsync(
@@ -1621,8 +1781,9 @@ namespace Telegram.Bot
             string emojis,
             bool isMasks = default,
             MaskPosition maskPosition = default,
-            CancellationToken cancellationToken = default) =>
-            MakeRequestAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return MakeRequestAsync(
                 new CreateNewAnimatedStickerSetRequest(userId, name, title, tgsSticker, emojis)
                 {
                     ContainsMasks = isMasks,
@@ -1630,6 +1791,7 @@ namespace Telegram.Bot
                 },
                 cancellationToken
             );
+        }
 
         /// <inheritdoc />
         public Task AddAnimatedStickerToSetAsync(
@@ -1638,42 +1800,50 @@ namespace Telegram.Bot
             InputFileStream tgsSticker,
             string emojis,
             MaskPosition maskPosition = default,
-            CancellationToken cancellationToken = default) =>
-            MakeRequestAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return MakeRequestAsync(
                 new AddAnimatedStickerToSetRequest(userId, name, tgsSticker, emojis)
                 {
                     MaskPosition = maskPosition
                 },
                 cancellationToken
             );
+        }
 
         /// <inheritdoc />
         public Task SetStickerPositionInSetAsync(
             string sticker,
             int position,
-            CancellationToken cancellationToken = default) =>
-            MakeRequestAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return MakeRequestAsync(
                 new SetStickerPositionInSetRequest(sticker, position),
                 cancellationToken
             );
+        }
 
         /// <inheritdoc />
         public Task DeleteStickerFromSetAsync(
             string sticker,
             CancellationToken cancellationToken = default
-        ) =>
-            MakeRequestAsync(new DeleteStickerFromSetRequest(sticker), cancellationToken);
+        )
+        {
+            return MakeRequestAsync(new DeleteStickerFromSetRequest(sticker), cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task SetStickerSetThumbAsync(
             string name,
             int userId,
             InputOnlineFile thumb = default,
-            CancellationToken cancellationToken = default) =>
-            MakeRequestAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return MakeRequestAsync(
                 new SetStickerSetThumbRequest(name, userId, thumb),
                 cancellationToken
             );
+        }
 
         #endregion
     }
